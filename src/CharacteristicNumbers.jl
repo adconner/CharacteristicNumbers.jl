@@ -1,5 +1,7 @@
 module CharacteristicNumbers
-export intersection_number_monodromy,mat_tensors
+export characteristic_number,chromatic_polynomial_coefficient,characteristic_numbers,chromatic_polynomial
+export relative_characteristic_number,relative_chromatic_polynomial_coefficient,relative_characteristic_numbers,relative_chromatic_polynomial
+export mat_tensors
 
 using HomotopyContinuation
 using LinearAlgebra
@@ -7,7 +9,8 @@ using IterTools
 using DataStructures
 
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
-function intersection_number_monodromy(T,alpha;startsols=100,xtol=1e-14,compile=true,show_progress=true,max_loops_no_progress=2)
+function characteristic_number(T,alpha;startsols=1,xtol=1e-14,compile=true,
+    show_progress=true,max_loops_no_progress=5)
   a,b,_ = size(T)
   @var x[1:a]
   x0s = randn(a,startsols)
@@ -104,7 +107,7 @@ function linear_forms_vanishing_on_prefix(vs,k)
 end
 
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
-function intersection_number(T,alpha;compile=false,show_progress=false)
+function characteristic_number_startsystem(T,alpha;compile=false,show_progress=false)
   a,b,_ = size(T)
   @var x[1:a]
   eqs = [sum(randn(length(x)) .* x) .- 1]
@@ -140,7 +143,7 @@ end
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
 # these are mateusz's different notion of intersection_number, it doesnt compute
 # the same thing as above!
-function intersection_number2(T,alpha;compile=false,show_progress=false)
+function relative_characteristic_number(T,alpha;compile=false,show_progress=false)
   a,b,_ = size(T)
   @var x[1:a]
   eqs = [sum(randn(length(x)) .* x) .- 1]
@@ -181,18 +184,28 @@ function intersection_number2(T,alpha;compile=false,show_progress=false)
   # println( ns[res+1:min(end,res+4)] )
   return res
 end
+  
+function chromatic_polynomial_coefficient(T, k)
+  a,b,_ = size(T)
+  return characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k])
+end
+  
+function relative_chromatic_polynomial_coefficient(T, k)
+  a,b,_ = size(T)
+  return relative_characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k])
+end
+
+function chromatic_polynomial(T)
+  a,b,_ = size(T)
+  return [chromatic_polynomial_coefficient(T, k) for k in 0:a-1]
+end
+
+function relative_chromatic_polynomial(T)
+  a,b,_ = size(T)
+  return [relative_chromatic_polynomial_coefficient(T, k) for k in 0:a-1]
+end
 
 function characteristic_numbers(T)
-  a,b,_ = size(T)
-  return [intersection_number_monodromy(T, [a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
-end
-
-function characteristic_numbers2(T)
-  a,b,_ = size(T)
-  return [intersection_number2(T, [a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
-end
-
-function intersection_polynomial(T)
   a,b,_ = size(T)
   # degree a-1 in b-1 variables
   out = []
@@ -201,13 +214,13 @@ function intersection_polynomial(T)
     for (j,i) in enumerate(ixs)
       alpha[i-j+1] += 1
     end
-    push!(out,(alpha,intersection_number_monodromy(T,alpha)))
+    push!(out,(alpha,characteristic_number(T,alpha)))
     println(join(map(string,out[end])," "))
   end
   return out
 end
 
-function intersection_polynomial2(T)
+function relative_characteristic_numbers(T)
   a,b,_ = size(T)
   # degree a-1 in b-1 variables
   out = []
@@ -216,7 +229,7 @@ function intersection_polynomial2(T)
     for (j,i) in enumerate(ixs)
       alpha[i-j+1] += 1
     end
-    push!(out,(alpha,intersection_number2(T,alpha)))
+    push!(out,(alpha,relative_characteristic_number(T,alpha)))
     # println(join(map(string,out[end])," "))
   end
   return out
