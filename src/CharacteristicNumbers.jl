@@ -1,216 +1,10 @@
+module CharacteristicNumbers
+export intersection_number_monodromy,mat_tensors
+
 using HomotopyContinuation
 using LinearAlgebra
 using IterTools
 using DataStructures
-
-S23 = zeros(10,7,7)
-S23[1,3,1] = -1
-S23[1,1,3] = -1
-S23[1,2,2] = 2
-S23[2,1,5] = -1
-S23[2,2,4] = 1
-S23[2,4,2] = 1
-S23[2,5,1] = -1
-S23[3,1,6] = -1
-S23[3,4,3] = 1
-S23[3,3,4] = 1
-S23[3,6,1] = -1
-S23[4,1,6] = -1
-S23[4,5,2] = 1
-S23[4,2,5] = 1
-S23[4,6,1] = -1
-S23[5,1,7] = -1
-S23[5,3,5] = 1
-S23[5,5,3] = 1
-S23[5,7,1] = -1
-S23[6,5,5] = 2
-S23[6,4,6] = -1
-S23[6,6,4] = -1
-S23[7,6,2] = 1
-S23[7,7,1] = -1
-S23[7,2,6] = 1
-S23[7,1,7] = -1
-S23[8,2,7] = -1
-S23[8,3,6] = 1
-S23[8,6,3] = 1
-S23[8,7,2] = -1
-S23[9,5,6] = 1
-S23[9,7,4] = -1
-S23[9,6,5] = 1
-S23[9,4,7] = -1
-S23[10,7,5] = -1
-S23[10,5,7] = -1
-S23[10,6,6] = 2
-
-S14 = zeros(10,7,7)
-S14[1,2,3] = 1
-S14[1,4,1] = -1
-S14[1,1,4] = -1
-S14[1,3,2] = 1
-S14[2,1,5] = -1
-S14[2,2,4] = 1
-S14[2,4,2] = 1
-S14[2,5,1] = -1
-S14[3,5,3] = -1
-S14[3,3,5] = -1
-S14[3,4,4] = 2
-S14[4,1,6] = -1
-S14[4,5,2] = 1
-S14[4,2,5] = 1
-S14[4,6,1] = -1
-S14[5,4,5] = 1
-S14[5,3,6] = -1
-S14[5,6,3] = -1
-S14[5,5,4] = 1
-S14[6,3,7] = -1
-S14[6,7,3] = -1
-S14[6,5,5] = 2
-S14[7,6,2] = 1
-S14[7,7,1] = -1
-S14[7,2,6] = 1
-S14[7,1,7] = -1
-S14[8,3,7] = -1
-S14[8,7,3] = -1
-S14[8,4,6] = 1
-S14[8,6,4] = 1
-S14[9,5,6] = 1
-S14[9,7,4] = -1
-S14[9,6,5] = 1
-S14[9,4,7] = -1
-S14[10,7,5] = -1
-S14[10,5,7] = -1
-S14[10,6,6] = 2
-
-S22 = zeros(6,6,6)
-S22[1,3,1] = -1
-S22[1,1,3] = -1
-S22[1,2,2] = 2
-S22[2,1,5] = -1
-S22[2,2,4] = 1
-S22[2,4,2] = 1
-S22[2,5,1] = -1
-S22[3,1,6] = -1
-S22[3,4,3] = 1
-S22[3,3,4] = 1
-S22[3,6,1] = -1
-S22[4,1,6] = -1
-S22[4,5,2] = 1
-S22[4,2,5] = 1
-S22[4,6,1] = -1
-S22[5,6,2] = -1
-S22[5,3,5] = 1
-S22[5,5,3] = 1
-S22[5,2,6] = -1
-S22[6,5,5] = 2
-S22[6,4,6] = -1
-S22[6,6,4] = -1
-
-S13 = zeros(6,6,6)
-S13[1,2,3] = 1
-S13[1,4,1] = -1
-S13[1,1,4] = -1
-S13[1,3,2] = 1
-S13[2,1,5] = -1
-S13[2,2,4] = 1
-S13[2,4,2] = 1
-S13[2,5,1] = -1
-S13[3,5,3] = -1
-S13[3,3,5] = -1
-S13[3,4,4] = 2
-S13[4,1,6] = -1
-S13[4,5,2] = 1
-S13[4,2,5] = 1
-S13[4,6,1] = -1
-S13[5,4,5] = 1
-S13[5,3,6] = -1
-S13[5,6,3] = -1
-S13[5,5,4] = 1
-S13[6,5,5] = 2
-S13[6,4,6] = -1
-S13[6,6,4] = -1
-
-V2 = zeros(6,6,6)
-V2[1,4,1] = -1
-V2[1,1,4] = -1
-V2[1,2,2] = 2
-V2[2,2,3] = 1
-V2[2,1,5] = -1
-V2[2,3,2] = 1
-V2[2,5,1] = -1
-V2[3,1,6] = -1
-V2[3,6,1] = -1
-V2[3,3,3] = 2
-V2[4,3,4] = 1
-V2[4,4,3] = 1
-V2[4,5,2] = -1
-V2[4,2,5] = -1
-V2[5,6,2] = -1
-V2[5,3,5] = 1
-V2[5,5,3] = 1
-V2[5,2,6] = -1
-V2[6,5,5] = 2
-V2[6,4,6] = -1
-V2[6,6,4] = -1
-
-
-        
-
-# L = zeros(15,10)
-# L[1,1] = 1
-# L[2,1] = 1
-# L[3,1] = 1
-# L[1,2] = -1
-# L[4,2] = 1
-# L[5,2] = 1
-# L[4,3] = -1
-# L[6,3] = 1
-# L[7,3] = 1
-# L[6,4] = -1
-# L[8,4] = 1
-# L[9,4] = 1
-# L[2,5] = -1
-# L[8,5] = -1
-# L[10,5] = 1
-# L[3,6] = -1
-# L[11,6] = 1
-# L[12,6] = 1
-# L[5,7] = -1
-# L[13,7] = 1
-# L[14,7] = 1
-# L[7,8] = -1
-# L[11,8] = -1
-# L[15,8] = 1
-# L[9,9] = -1
-# L[12,9] = -1
-# L[13,9] = -1
-# L[10,10] = -1
-# L[14,10] = -1
-# L[15,10] = -1
-# L = transpose(L)
-
-# function chromatic_number(L,k)
-#   a,e = size(L)
-#   @var x[1:a]
-#   @var y[1:e]
-
-#   eqs = reshape(reshape(x,1,a)*L, e) .* y - ones(e)
-
-#   # startsols = 100
-#   # x0s = randn(a,startsols)
-#   # v0 = vec(svd(x0s).U[:,1]) 
-#   # v0 can be any vector, pick one take make the next line not blow up x0's too much
-#   # x0s ./= sum(v0 .* x0s,dims=1)
-#   # x0s = [x0s[:,j] for j in 1:size(x0s,2)]
-
-#   v0 = randn(a)
-#   append!(eqs, [sum(v0 .* x) - 1])
-
-#   append!(eqs, [sum(x.*randn(a)) for _ in 1:a-1-k ])
-#   append!(eqs, [sum(y.*randn(e)) for _ in 1:k ])
-#   C = System(eqs,variables=[x; y])
-#   return C
-
-# end
 
 # # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
 # function top_intersection_number(T)
@@ -242,7 +36,7 @@ V2[6,6,4] = -1
 # end
 
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
-function intersection_number_monodromy(T,alpha;startsols=1,xtol=1e-14,compile=true,show_progress=true,max_loops_no_progress=2)
+function intersection_number_monodromy(T,alpha;startsols=100,xtol=1e-14,compile=true,show_progress=true,max_loops_no_progress=2)
   a,b,_ = size(T)
   @var x[1:a]
   x0s = randn(a,startsols)
@@ -335,7 +129,7 @@ function intersection_number_monodromy(T,alpha;startsols=1,xtol=1e-14,compile=tr
 end
 
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
-function intersection_number_monodromy_no_inv(T,alpha;startsols=1,xtol=1e-6,compile=false,show_progress=true,max_loops_no_progress=2)
+function intersection_number_monodromy_no_inv(T,alpha;startsols=100,xtol=1e-6,compile=false,show_progress=true,max_loops_no_progress=2)
   a,b,_ = size(T)
   @var x[1:a]
   x0s = randn(a,startsols)
@@ -426,7 +220,7 @@ function intersection_number_monodromy_no_inv(T,alpha;startsols=1,xtol=1e-6,comp
 end
 
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
-function intersection_number_monodromy_function_det(T,alpha;compile=true,show_progress=true,max_loops_no_progress=2,startsols=1)
+function intersection_number_monodromy_function_det(T,alpha;compile=true,show_progress=true,max_loops_no_progress=2,startsols=100)
   a,b,_ = size(T)
   @var x[1:a]
   x0s = randn(a,startsols)
@@ -559,18 +353,17 @@ function intersection_number_best_of(T,alpha,of=1)
   return findfirst(p -> p == of, cnts)
 end
 
-function chromatic_numbers(T)
+function characteristic_numbers(T)
   a,b,_ = size(T)
-  return [intersection_number_monodromy_no_inv(T, [a-1-k , zeros(Int64,b-3)..., k]) 
-    for k in 0:a-1]
+  return [intersection_number_best_of(T, [a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
 end
 
-function chromatic_numbers2(T)
+function characteristic_numbers2(T)
   a,b,_ = size(T)
   return [intersection_number2(T, [a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
 end
 
-function characterestic_numbers(T)
+function intersection_polynomial(T)
   a,b,_ = size(T)
   # degree a-1 in b-1 variables
   out = []
@@ -579,13 +372,13 @@ function characterestic_numbers(T)
     for (j,i) in enumerate(ixs)
       alpha[i-j+1] += 1
     end
-    push!(out,(alpha,intersection_number_monodromy_no_inv(T,alpha)))
+    push!(out,(alpha,intersection_number_monodromy(T,alpha)))
     println(join(map(string,out[end])," "))
   end
   return out
 end
 
-function characteristic_numbers2(T)
+function intersection_polynomial2(T)
   a,b,_ = size(T)
   # degree a-1 in b-1 variables
   out = []
@@ -802,8 +595,5 @@ function poly_circuit_det(m)
   return principal_minors[end] # actually n!*det(m)
 end
 
-if !isinteractive()
-  a,n,r = map(x->parse(Int64,x),ARGS)
-  println(a," ",n," ",r," ",rank_number(a,n,r))
-end
 
+end # module CharacteristicNumbers
