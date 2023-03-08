@@ -99,7 +99,7 @@ function intersection_number_monodromy(T,alpha;startsols=100,xtol=1e-14,compile=
         @var mv[msize,1:length(ms),1:k]
         append!(eqs,vec(sum(mv.*ms,dims=1)))
         append!(p,vec(mv))
-        mv0 = linear_forms_vanishing_on_prefix(hcat([Float64.(subs(ms,z=>z0)) for z0 in z0s]...),k)
+        mv0 = linear_forms_vanishing_on_prefix(hcat([Float64.(evaluate(ms,z=>z0)) for z0 in z0s]...),k)
         append!(p0,vec(transpose(mv0)))
       end
     end
@@ -114,14 +114,14 @@ function intersection_number_monodromy(T,alpha;startsols=100,xtol=1e-14,compile=
         @var mv[b-msize,1:length(ms),1:k]
         append!(eqs,vec(sum(mv.*ms,dims=1)))
         append!(p,vec(mv))
-        mv0 = linear_forms_vanishing_on_prefix(hcat([Float64.(subs(ms,z=>z0)) for z0 in z0s]...),k)
+        mv0 = linear_forms_vanishing_on_prefix(hcat([Float64.(evaluate(ms,z=>z0)) for z0 in z0s]...),k)
         append!(p0,vec(transpose(mv0)))
       end
     end
   end
 
   C = System(eqs,variables=z,parameters=p)
-  sols = count(z0 -> norm(Float64.(subs(C.expressions,C.variables => z0, 
+  sols = count(z0 -> norm(Float64.(evaluate(C.expressions,C.variables => z0, 
                                         C.parameters => p0))) < 1e-5,z0s)
   # println("starting with ", sols, " solutions")
   return nsolutions(monodromy_solve(C,z0s,p0,compile=compile,show_progress=show_progress, 
@@ -212,7 +212,7 @@ function intersection_number_monodromy_no_inv(T,alpha;startsols=100,xtol=1e-6,co
     end
   end
   C = System(eqs,variables=vars,parameters=params)
-  sols = count(x0 -> norm(Float64.(subs(C.expressions,C.variables => x0, 
+  sols = count(x0 -> norm(Float64.(evaluate(C.expressions,C.variables => x0, 
                                         C.parameters => p0))) < 1e-5,vars0s)
   println("starting with ", sols, " solutions")
   return nsolutions(monodromy_solve(C,vars0s,p0,compile=compile,show_progress=show_progress, 
@@ -251,7 +251,7 @@ function intersection_number_monodromy_function_det(T,alpha;compile=true,show_pr
     end
   end
   C = System(eqs,parameters=params)
-  sols = count(x0 -> norm(Float64.(subs(C.expressions,C.variables => x0, 
+  sols = count(x0 -> norm(Float64.(evaluate(C.expressions,C.variables => x0, 
                                         C.parameters => p0))) < 1e-5,x0s)
   println("starting with ", sols, " solutions")
   return nsolutions(monodromy_solve(C,x0s,p0,compile=compile,show_progress=show_progress, 
