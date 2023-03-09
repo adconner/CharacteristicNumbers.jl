@@ -11,7 +11,8 @@ using DataStructures
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
 function characteristic_number(T,alpha;startsols=1,xtol=1e-14,compile=true,
     show_progress=true,max_loops_no_progress=5)
-  a,b,_ = size(T)
+  a,b,c = size(T)
+  @assert(length(alpha) == b-1 && sum(alpha) == a-1 && b == c)
   @var x[1:a]
   x0s = randn(a,startsols)
   v0 = vec(svd(x0s).U[:,1]) 
