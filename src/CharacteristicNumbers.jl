@@ -7,12 +7,72 @@ using HomotopyContinuation
 using LinearAlgebra
 using IterTools
 using DataStructures
+using Combinatorics
 
-# size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) = a-1
-function characteristic_number(T,alpha;startsols=1,xtol=1e-14,compile=true,
-    show_progress=true,max_loops_no_progress=5)
-  a,b,c = size(T)
-  @assert(length(alpha) == b-1 && sum(alpha) == a-1 && b == c)
+export det_polarized
+# when n is smaller than the size of the Xs, this is the polarization of the unique polynomial computing the nth elementary symmetric function of the eigen values of its input
+
+# relations
+# 1/k! det_polarized(X,..(k times)..,X,A,...,Z) = det X * det_polarized(X^-1 A, ... X^-1 Z)
+# for instance both are equal to the coefficient of a..z in the expansion of
+# det (X + aA + ... + zZ). To see it for the right side, set A = ... = Z
+# and write det(X + aA) = det X * det(I + (a+..+z) X^-1 A) and the coefficinet of a..z is the elementary function of the eigenvalues of A. Then note that the expression with A..Z possibily different is multilinear and symmetric, so it must agree with the left hand side
+function det_polarized(Xs, deduplicate_terms=true)
+  n = length(Xs)
+
+  function conjugate_by_transposition(p, i, j)
+    q = [k == j ? i : (k == i ? j : k) for k in p]
+    (q[i], q[j]) = (q[j], q[i])
+    return q
+  end
+
+  equal = DisjointSets(Combinatorics.permutations(1:n))
+  if deduplicate_terms
+    for (i, X) in enumerate(Xs)
+      j = findnext(m -> m == X, Xs, i + 1)
+      if j !== nothing
+        for p in equal
+          union!(equal, p, conjugate_by_transposition(p, i, j))
+        end
+      end
+    end
+  end
+
+  sizes = Dict()
+  for p in equal
+    r = find_root!(equal, p)
+    sizes[r] = get(sizes, r, 0) + 1
+  end
+  tot = 0
+  for (p, sz) in sizes
+    term = levicivita(p) * sz
+    seen = Set()
+    for i in 1:n
+      if i in seen
+        continue
+      end
+      M = Xs[i]
+      push!(seen, i)
+      j = p[i]
+      while j != i
+        M = M * Xs[j]
+        push!(seen, j)
+        j = p[j]
+      end
+      term *= tr(M)
+    end
+    tot += term
+  end
+  return tot
+end
+
+# We use the fact that Lambda^k V \cong Lambda^(n-k) V^* \ot \Lambda^n V as GL(V) modules, so linear combinations of k x k minors of an n x n matrix M is a linear combination of n-k x n-k minors of M^{-1} (up to a scale of det M). Specifically, a k x k minor is up to \pm det M the complementary n-k x n-k minor of (M^(-1))^t
+
+# size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) + sum(beta) = a-1
+function characteristic_number(T, alpha; startsols=1, xtol=1e-14, compile=true,
+  show_progress=true, max_loops_no_progress=2)
+  a, b, c = size(T)
+  @assert(length(alpha) == b - 1 && sum(alpha) == a - 1 && b == c)
   @var x[1:a]
   x0s = randn(a,startsols)
   v0 = vec(svd(x0s).U[:,1]) 
