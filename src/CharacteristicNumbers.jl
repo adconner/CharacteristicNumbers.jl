@@ -65,11 +65,104 @@ function det_polarized(Xs, deduplicate_terms=true)
   end
   return tot
 end
+  
+function characteristic_number(T; alpha = nothing, beta = nothing, startsols  = 1)
+  a, n, m = size(T)
+  @assert n == m
+  if alpha === nothing
+    alpha = fill(0,n-1)
+  end
+  if beta === nothing
+    beta = fill(0,n-1)
+  end
+  @assert length(alpha) == n - 1
+  @assert length(beta) == n - 1
+  @assert sum(alpha) + sum(beta) == a - 1
+  
+  @var x[1:a]
+  @var y[1:n,1:n]
+  
+  x0s = randn(a, startsols)
+  v0 = vec(svd(x0s).U[:, 1])
+  # v0 can be any vector, pick one take make the next line not blow up x0's too much
+  x0s ./= sum(v0 .* x0s, dims=1)
+  x0s = [x0s[:, j] for j in 1:size(x0s, 2)]
+  eqs = [sum(v0 .* x) .- 1]
+  
+  M(e) = dropdims(sum(e .* T, dims=1), dims=1)
+  m = M(x)
+
+  append!(eqs, vec(y * m - I))
+  
+  z = vcat(x, vec(y))
+  getz(x0) = vcat(x0, vec(inv(M(x0))))
+  z0s = [getz(x0) for x0 in x0s]
+  
+  pv = Vector{Variable}()
+  p0 = Vector{Float64}()
+  
+  function add_constraint(k, dim; relative=false)
+    if dim == 0
+      return
+    end
+    k = n-k
+    if relative
+      @var t[1:a]
+      mt = y*M(t)
+    else
+      @var t[1:n*n]
+      mt = y*reshape(t,n,n)
+    end
+    D = det_polarized(fill(mt,k))
+    
+    eqdimlo = 1
+    eqdimhi = min( binomial(n,k)^2, binomial(length(t)+k-1,k) )
+    println(eqdimhi)
+
+    while eqdimlo < eqdimhi
+      mid = div(eqdimlo + eqdimhi+1,2)
+      if rank( ((z0,t0) -> D(z=>z0, t=>t0)).([getz(randn(a)) for _ in 1:mid],[ 
+          randn(length(t)) for _ in 1:1, _ in 1:mid ]) ) < mid
+        eqdimhi = mid-1
+      else
+        eqdimlo = mid
+      end
+    end
+    println(eqdimlo)
+    Ds = [ D(t => randn(length(t))) for _ in 1:eqdimlo ]
+    
+    @var p[relative ? 1 : 2, k, 1:eqdimlo, 1:dim]
+    println(size(p))
+    # t0s = [randn(eqdimlo) for _ in 1:dim]
+    # println([(v,t0) for (v,t0) in zip(p[:,i],t0s) for i in 1:dim ])
+    append!(eqs,[ sum(eq*v for (eq,v) in zip(Ds,p[:,i])) for i in 1:dim ])
+
+    # println(((z0,t0) -> D( z=>z0, t=>t0 )).(reshape(z0s, 1, :), t0s))
+    p0cur = transpose(linear_forms_vanishing_on_prefix(
+      [eq(z=>z0) for eq in Ds, z0 in z0s], dim))
+    append!(pv,vec(p))
+    append!(p0,vec(p0cur))
+  end
+
+  for (k,dim) in enumerate(alpha)
+    add_constraint(k,dim,relative=false)
+  end
+  for (k,dim) in enumerate(beta)
+    add_constraint(k,dim,relative=false)
+  end
+    
+  F = System(eqs, variables=z, parameters=pv)
+  sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
+      F.parameters => p0))) < 1e-5, z0s)
+  # println("starting with ", sols, " solutions")
+  return nsolutions(monodromy_solve(F, z0s, p0, max_loops_no_progress=2))
+end
 
 # We use the fact that Lambda^k V \cong Lambda^(n-k) V^* \ot \Lambda^n V as GL(V) modules, so linear combinations of k x k minors of an n x n matrix M is a linear combination of n-k x n-k minors of M^{-1} (up to a scale of det M). Specifically, a k x k minor is up to \pm det M the complementary n-k x n-k minor of (M^(-1))^t
 
+export characteristic_number_old
 # size(T) = (a,b,b), len(alpha) = b-1, sum(alpha) + sum(beta) = a-1
-function characteristic_number(T, alpha; startsols=1, xtol=1e-14, compile=true,
+function characteristic_number_old(T, alpha; startsols=1, xtol=1e-14, compile=true,
   show_progress=true, max_loops_no_progress=2)
   a, b, c = size(T)
   @assert(length(alpha) == b - 1 && sum(alpha) == a - 1 && b == c)
