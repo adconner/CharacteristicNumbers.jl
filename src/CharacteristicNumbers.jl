@@ -66,7 +66,8 @@ function det_polarized(Xs, deduplicate_terms=true)
   return tot
 end
   
-function characteristic_number(T; alpha = nothing, beta = nothing, startsols  = 1)
+function characteristic_number(T; alpha = nothing, beta = nothing, startsols=10, 
+    xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2)
   a, n, m = size(T)
   @assert n == m
   if alpha === nothing
@@ -143,9 +144,11 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols  = 
     
   F = System(eqs, variables=z, parameters=pv)
   sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
-      F.parameters => p0))) < 1e-5, z0s)
-  # println("starting with ", sols, " solutions")
-  return nsolutions(monodromy_solve(F, z0s, p0, max_loops_no_progress=2))
+      F.parameters => p0))) < 1e-13, z0s)
+  z0s = z0s[1:sols]
+  println("starting with ", sols, " solutions")
+  return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
+    max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
 end
 
 # We use the fact that Lambda^k V \cong Lambda^(n-k) V^* \ot \Lambda^n V as GL(V) modules, so linear combinations of k x k minors of an n x n matrix M is a linear combination of n-k x n-k minors of M^{-1} (up to a scale of det M). Specifically, a k x k minor is up to \pm det M the complementary n-k x n-k minor of (M^(-1))^t
