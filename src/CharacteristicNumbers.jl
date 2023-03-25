@@ -121,7 +121,7 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols  = 
       
     Ds = [ D(t => randn(length(t))) for _ in 1:eqdim ]
     
-    @var p[relative ? 1 : 2, k, 1:eqdim, 1:dim]
+    @var p[relative ? 2 : 1, k, 1:eqdim, 1:dim]
     println(size(p))
     # t0s = [randn(eqdim) for _ in 1:dim]
     # println([(v,t0) for (v,t0) in zip(p[:,i],t0s) for i in 1:dim ])
