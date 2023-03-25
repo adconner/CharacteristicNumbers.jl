@@ -115,25 +115,15 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols  = 
     end
     D = det_polarized(fill(mt,k))
     
-    eqdimlo = 1
-    eqdimhi = min( binomial(n,k)^2, binomial(length(t)+k-1,k) )
-    println(eqdimhi)
-
-    while eqdimlo < eqdimhi
-      mid = div(eqdimlo + eqdimhi+1,2)
-      if rank( ((z0,t0) -> D(z=>z0, t=>t0)).([getz(randn(a)) for _ in 1:mid],[ 
-          randn(length(t)) for _ in 1:1, _ in 1:mid ]) ) < mid
-        eqdimhi = mid-1
-      else
-        eqdimlo = mid
-      end
-    end
-    println(eqdimlo)
-    Ds = [ D(t => randn(length(t))) for _ in 1:eqdimlo ]
+    eqdim_upperbound = min( binomial(n,k)^2, binomial(length(t)+k-1,k) )
+    eqdim = rank( ((z0,t0) -> D(z=>z0, t=>t0)).([getz(randn(a)) for _ in 1:eqdim_upperbound],[ 
+          randn(length(t)) for _ in 1:1, _ in 1:eqdim_upperbound ]) )
+      
+    Ds = [ D(t => randn(length(t))) for _ in 1:eqdim ]
     
-    @var p[relative ? 1 : 2, k, 1:eqdimlo, 1:dim]
+    @var p[relative ? 1 : 2, k, 1:eqdim, 1:dim]
     println(size(p))
-    # t0s = [randn(eqdimlo) for _ in 1:dim]
+    # t0s = [randn(eqdim) for _ in 1:dim]
     # println([(v,t0) for (v,t0) in zip(p[:,i],t0s) for i in 1:dim ])
     append!(eqs,[ sum(eq*v for (eq,v) in zip(Ds,p[:,i])) for i in 1:dim ])
 
