@@ -139,7 +139,7 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=10,
     add_constraint(k,dim,relative=false)
   end
   for (k,dim) in enumerate(beta)
-    add_constraint(k,dim,relative=false)
+    add_constraint(k,dim,relative=true)
   end
     
   F = System(eqs, variables=z, parameters=pv)
