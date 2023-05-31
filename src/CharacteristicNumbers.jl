@@ -136,9 +136,6 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
         spanning_set = Set{Vector{Int64}}()
         for s in get_mapping_spanning_set(nderivatives-1, relative=true)
           for i in 1:a
-            if i in s
-              continue
-            end
             push!(spanning_set,sort([s; i]))
           end
         end
