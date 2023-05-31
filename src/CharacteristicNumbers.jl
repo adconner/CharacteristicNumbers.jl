@@ -110,9 +110,9 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     k = n-nderivatives
     if relative
       if k < n-k 
-        return det_polarized( [fill(M(x),k); [T[i] for i in ix] ])
+        return det_polarized( [fill(M(x),k); [T[i,:,:] for i in ix] ])
       else
-        return det_polarized( [y*T[i] for i in ix] )
+        return det_polarized( [y*T[i,:,:] for i in ix] )
       end
     else
       if k < n-k 
@@ -131,11 +131,11 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
       end
     else
       if nderivatives == 1
-        spanning_set = [[i] for i in 1:(relative ? a : n^2)]
+        spanning_set = [[i] for i in 1:a]
       else
         spanning_set = Set{Vector{Int64}}()
-        for s in get_mapping_spanning_set(nderivatives-1)
-          for i in 1:(relative ? a : n^2)
+        for s in get_mapping_spanning_set(nderivatives-1, relative=true)
+          for i in 1:a
             if i in s
               continue
             end
@@ -145,9 +145,9 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
         spanning_set = sort(collect(spanning_set))
       end
     end
-    spanning_set = [get_function(s,relative=relative) for s in spanning_set]
+    spanning_set_fs = [get_function(s,relative=relative) for s in spanning_set]
     F = qr( ((z0,exp) -> exp(z=>z0)).([getz(randn(a)) for _ in 1:length(spanning_set)],[ 
-        exp for _ in 1:1, exp in spanning_set ]), ColumnNorm())
+        exp for _ in 1:1, exp in spanning_set_fs ]), ColumnNorm())
     r = findfirst(abs.(diag(F.R)) .< 1e-10)
     if r === nothing
       r = length(spanning_set)
@@ -156,6 +156,7 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     end
     ixs = sort(F.p[1:r])
     spanning_set = [spanning_set[i] for i in ixs]
+    spanning_set_fs = [spanning_set_fs[i] for i in ixs]
     return spanning_set
   end
   # return m,get_function,get_mapping_spanning_set
@@ -168,7 +169,8 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
       return
     end
     nderivatives = n-k
-    fs = get_mapping_spanning_set(nderivatives; relative=relative)
+    fs = [get_function(s,relative=relative) 
+      for s in get_mapping_spanning_set(nderivatives; relative=relative)]
     length(fs)
     
     @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
@@ -467,7 +469,7 @@ function chromatic_polynomial_old(T)
 end
   
 export relative_chromatic_polynomial_old
-function relative_chromatic_polynomial_old(T, k)
+function relative_chromatic_polynomial_old(T)
   a,b,_ = size(T)
   return [relative_characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
 end
