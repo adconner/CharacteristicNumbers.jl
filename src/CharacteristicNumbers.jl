@@ -1,6 +1,6 @@
 module CharacteristicNumbers
-export characteristic_number,chromatic_polynomial_coefficient,characteristic_numbers,chromatic_polynomial
-export relative_characteristic_number,relative_chromatic_polynomial_coefficient,relative_characteristic_numbers,relative_chromatic_polynomial
+export characteristic_number, chromatic_polynomial_coefficient, characteristic_numbers, chromatic_polynomial
+export relative_characteristic_number, relative_chromatic_polynomial_coefficient, relative_characteristic_numbers, relative_chromatic_polynomial
 export mat_tensors
 
 using HomotopyContinuation
@@ -8,6 +8,9 @@ using LinearAlgebra
 using IterTools
 using DataStructures
 using Combinatorics
+using Memoize
+
+using Debugger
 
 export det_polarized
 # when n is smaller than the size of the Xs, this is the polarization of the unique polynomial computing the nth elementary symmetric function of the eigen values of its input
@@ -66,7 +69,7 @@ function det_polarized(Xs, deduplicate_terms=true)
   return tot
 end
   
-function characteristic_number(T; alpha = nothing, beta = nothing, startsols=10, 
+function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1, 
     xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2)
   a, n, m = size(T)
   @assert n == m
@@ -91,16 +94,145 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=10,
   eqs = [sum(v0 .* x) .- 1]
   
   M(e) = dropdims(sum(e .* T, dims=1), dims=1)
+
+  append!(eqs, vec(y * M(x) - I))
+  
+  z = vcat(x, vec(y))
+  getz(x0) = vcat(x0, vec(inv(M(x0))))
+  z0s = [getz(x0) for x0 in x0s]
+
+  mbasis = [zeros(n,n) for i in 1:n^2]
+  for (i,j) in product(1:n,1:n)
+    mbasis[(i-1)*n+j][i,j] = 1
+  end
+  @memoize function get_function(ix; relative = false)
+    nderivatives = length(ix)
+    k = n-nderivatives
+    if relative
+      if k < n-k 
+        return det_polarized( [fill(M(x),k); [T[i] for i in ix] ])
+      else
+        return det_polarized( [y*T[i] for i in ix] )
+      end
+    else
+      if k < n-k 
+        return det_polarized( [fill(M(x),k); [mbasis[i] for i in ix] ])
+      else
+        return det_polarized( [y*mbasis[i] for i in ix] )
+      end
+    end
+  end
+    
+  @memoize function get_mapping_spanning_set(nderivatives; relative=false)
+    if !relative 
+      spanning_set = Vector{Int64}[]
+      for (ix,jx) in product(subsets(1:n,nderivatives),subsets(1:n,nderivatives))
+        push!(spanning_set,[(i-1)*n+j for (i,j) in zip(ix,jx)])
+      end
+    else
+      if nderivatives == 1
+        spanning_set = [[i] for i in 1:(relative ? a : n^2)]
+      else
+        spanning_set = Set{Vector{Int64}}()
+        for s in get_mapping_spanning_set(nderivatives-1)
+          for i in 1:(relative ? a : n^2)
+            if i in s
+              continue
+            end
+            push!(spanning_set,sort([s; i]))
+          end
+        end
+        spanning_set = sort(collect(spanning_set))
+      end
+    end
+    println(n-nderivatives," ",spanning_set)
+    spanning_set = [get_function(s,relative=relative) for s in spanning_set]
+    display(spanning_set)
+    F = qr( ((z0,exp) -> exp(z=>z0)).([getz(randn(a)) for _ in 1:length(spanning_set)],[ 
+        exp for _ in 1:1, exp in spanning_set ]), ColumnNorm())
+    r = findfirst(abs.(diag(F.R)) .< 1e-10)
+    if r === nothing
+      r = length(spanning_set)
+    else
+      r = r - 1
+    end
+    println("r = ",r)
+    ixs = sort(F.p[1:r])
+    println(nderivatives," ",relative," ixs ",ixs)
+    spanning_set = [spanning_set[i] for i in ixs]
+    display(spanning_set)
+    return spanning_set
+  end
+  # return m,get_function,get_mapping_spanning_set
+  
+  pv = Vector{Variable}()
+  p0 = Vector{Float64}()
+
+  function add_constraint(k, dim; relative=false)
+    if dim == 0
+      return
+    end
+    nderivatives = n-k
+    fs = get_mapping_spanning_set(nderivatives; relative=relative)
+    length(fs)
+    
+    @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
+    println(size(p))
+    append!(eqs,[ sum(eq*v for (eq,v) in zip(fs,p[:,i])) for i in 1:dim ])
+
+    println([eq(z=>z0) for eq in fs, z0 in z0s])
+    println(size([eq(z=>z0) for eq in fs, z0 in z0s]))
+    p0cur = transpose(linear_forms_vanishing_on_prefix(
+      [eq(z=>z0) for eq in fs, z0 in z0s], dim))
+    append!(pv,vec(p))
+    append!(p0,vec(p0cur))
+  end
+
+  for (k,dim) in enumerate(alpha)
+    add_constraint(k,dim,relative=false)
+  end
+  for (k,dim) in enumerate(beta)
+    add_constraint(k,dim,relative=true)
+  end
+    
+  F = System(eqs, variables=z, parameters=pv)
+  sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
+      F.parameters => p0))) < 1e-12, z0s)
+  z0s = z0s[1:sols]
+  if show_progress
+    println("starting with ", sols, " solutions")
+  end
+  return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
+    max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
+end
+  
+export characteristic_number_ss
+function characteristic_number_ss(T; alpha = nothing, beta = nothing)
+  a, n, m = size(T)
+  @assert n == m
+  if alpha === nothing
+    alpha = fill(0,n-1)
+  end
+  if beta === nothing
+    beta = fill(0,n-1)
+  end
+  @assert length(alpha) == n - 1
+  @assert length(beta) == n - 1
+  @assert sum(alpha) + sum(beta) == a - 1
+  
+  @var x[1:a]
+  @var y[1:n,1:n]
+  
+  # v0 can be any vector, pick one take make the next line not blow up x0's too much
+  eqs = [sum(randn(a) .* x) .- 1]
+  
+  M(e) = dropdims(sum(e .* T, dims=1), dims=1)
   m = M(x)
 
   append!(eqs, vec(y * m - I))
   
   z = vcat(x, vec(y))
   getz(x0) = vcat(x0, vec(inv(M(x0))))
-  z0s = [getz(x0) for x0 in x0s]
-  
-  pv = Vector{Variable}()
-  p0 = Vector{Float64}()
   
   function add_constraint(k, dim; relative=false)
     if dim == 0
@@ -122,17 +254,7 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=10,
       
     Ds = [ D(t => randn(length(t))) for _ in 1:eqdim ]
     
-    @var p[relative ? 2 : 1, k, 1:eqdim, 1:dim]
-    println(size(p))
-    # t0s = [randn(eqdim) for _ in 1:dim]
-    # println([(v,t0) for (v,t0) in zip(p[:,i],t0s) for i in 1:dim ])
-    append!(eqs,[ sum(eq*v for (eq,v) in zip(Ds,p[:,i])) for i in 1:dim ])
-
-    # println(((z0,t0) -> D( z=>z0, t=>t0 )).(reshape(z0s, 1, :), t0s))
-    p0cur = transpose(linear_forms_vanishing_on_prefix(
-      [eq(z=>z0) for eq in Ds, z0 in z0s], dim))
-    append!(pv,vec(p))
-    append!(p0,vec(p0cur))
+    append!(eqs,[ sum(randn()*e for e in Ds) for _ in 1:dim])
   end
 
   for (k,dim) in enumerate(alpha)
@@ -142,13 +264,8 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=10,
     add_constraint(k,dim,relative=true)
   end
     
-  F = System(eqs, variables=z, parameters=pv)
-  sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
-      F.parameters => p0))) < 1e-13, z0s)
-  z0s = z0s[1:sols]
-  println("starting with ", sols, " solutions")
-  return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
-    max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
+  F = System(eqs, variables=z)
+  return F
 end
 
 # We use the fact that Lambda^k V \cong Lambda^(n-k) V^* \ot \Lambda^n V as GL(V) modules, so linear combinations of k x k minors of an n x n matrix M is a linear combination of n-k x n-k minors of M^{-1} (up to a scale of det M). Specifically, a k x k minor is up to \pm det M the complementary n-k x n-k minor of (M^(-1))^t
@@ -250,6 +367,10 @@ function characteristic_number_old(T, alpha; startsols=1, xtol=1e-14, compile=tr
 end
 
 function linear_forms_vanishing_on_prefix(vs,k)
+  # println("linear_forms_vanishing_on_prefix")
+  # println(vs)
+  # println(k)
+  # println(size(vs))
   return transpose(qr(hcat(vs,randn(size(vs)[1],k))).Q[:,end-k+1:end])
 end
 
@@ -334,17 +455,29 @@ end
   
 function chromatic_polynomial_coefficient(T, k)
   a,b,_ = size(T)
-  return characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k])
+  return characteristic_number(T,alpha=[a-1-k , zeros(Int64,b-3)..., k])
 end
   
 function relative_chromatic_polynomial_coefficient(T, k)
   a,b,_ = size(T)
-  return relative_characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k])
+  return characteristic_number(T,beta=[a-1-k , zeros(Int64,b-3)..., k])
 end
 
 function chromatic_polynomial(T)
   a,b,_ = size(T)
   return [chromatic_polynomial_coefficient(T, k) for k in 0:a-1]
+end
+  
+export chromatic_polynomial_old
+function chromatic_polynomial_old(T)
+  a, b, _ = size(T)
+  return [characteristic_number_old(T,[a-1-k,zeros(Int64,b-3)...,k]) for k in 0:a-1]
+end
+  
+export relative_chromatic_polynomial_old
+function relative_chromatic_polynomial_old(T, k)
+  a,b,_ = size(T)
+  return [relative_characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
 end
 
 function relative_chromatic_polynomial(T)
@@ -383,5 +516,6 @@ function relative_characteristic_numbers(T)
 end
 
 include("misc.jl")
+include("mindegree.jl")
 
 end # module CharacteristicNumbers
