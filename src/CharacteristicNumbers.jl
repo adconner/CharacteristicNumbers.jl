@@ -145,9 +145,7 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
         spanning_set = sort(collect(spanning_set))
       end
     end
-    println(n-nderivatives," ",spanning_set)
     spanning_set = [get_function(s,relative=relative) for s in spanning_set]
-    display(spanning_set)
     F = qr( ((z0,exp) -> exp(z=>z0)).([getz(randn(a)) for _ in 1:length(spanning_set)],[ 
         exp for _ in 1:1, exp in spanning_set ]), ColumnNorm())
     r = findfirst(abs.(diag(F.R)) .< 1e-10)
@@ -156,11 +154,8 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     else
       r = r - 1
     end
-    println("r = ",r)
     ixs = sort(F.p[1:r])
-    println(nderivatives," ",relative," ixs ",ixs)
     spanning_set = [spanning_set[i] for i in ixs]
-    display(spanning_set)
     return spanning_set
   end
   # return m,get_function,get_mapping_spanning_set
@@ -177,11 +172,8 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     length(fs)
     
     @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
-    println(size(p))
     append!(eqs,[ sum(eq*v for (eq,v) in zip(fs,p[:,i])) for i in 1:dim ])
 
-    println([eq(z=>z0) for eq in fs, z0 in z0s])
-    println(size([eq(z=>z0) for eq in fs, z0 in z0s]))
     p0cur = transpose(linear_forms_vanishing_on_prefix(
       [eq(z=>z0) for eq in fs, z0 in z0s], dim))
     append!(pv,vec(p))
