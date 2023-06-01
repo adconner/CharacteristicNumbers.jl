@@ -4,7 +4,9 @@ export characteristic_number_generator
 export det_polarized
 export chromatic_polynomial, relative_chromatic_polynomial, all_invariants
 export characteristic_number, characteristic_number_generator
-export mat_tensors
+
+include("tensors.jl")
+export generic_rankr, tensor_n, cm_tensors
 
 using HomotopyContinuation
 using LinearAlgebra
@@ -58,7 +60,7 @@ function all_invariants(T, ordinary=true, relative=true, startsols=1,
       end
     end
     num = characteristic_number(alpha=alpha, beta=beta, startsols=startsols,
-      xtol=xtol, compile=compile, show_progress=show_progress, 
+      xtol=xtol, compile=compile, show_progress=false, 
       max_loops_no_progress=max_loops_no_progress)
     if show_progress
       println(" ",num)
@@ -298,7 +300,5 @@ end
 function linear_forms_vanishing_on_prefix(vs, k)
   return transpose(qr(hcat(vs, randn(size(vs)[1], k))).Q[:, end-k+1:end])
 end
-
-include("misc.jl")
 
 end # module CharacteristicNumbers
