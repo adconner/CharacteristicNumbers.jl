@@ -145,11 +145,11 @@ function characteristic_number_generator(T)
         for s in get_derivative_coordinates_relative(nderivatives)]
     else
       if k < n-k
-        spanning_fs = [ det(m[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ]
+        spanning_fs = vec([ det(m[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ])
       else
         # using det(m[ix,jx]) = det(m)*det(inv(m)[1:n - jx, 1:n - ix])
         # so the below are the same functions as above up to multiplication by det(m)
-        spanning_fs = [ det(y[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ]
+        spanning_fs = vec([ det(y[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ])
       end
       ixs = spanning_set_indices(spanning_fs)
       spanning_fs = [spanning_fs[i] for i in ixs]
@@ -158,7 +158,7 @@ function characteristic_number_generator(T)
   end
   
   function characteristic_number(; alpha = nothing, beta = nothing, startsols=1, 
-    xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2, monodromy=true)
+    xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=3)
     if alpha === nothing
       alpha = fill(0,n-1)
     end
@@ -187,6 +187,8 @@ function characteristic_number_generator(T)
         return
       end
       fs = get_fs(k,relative=relative) 
+      # println(k," ",relative)
+      # display(fs)
       @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
       append!(eqs,[ sum(eq*v for (eq,v) in zip(fs,p[:,i])) for i in 1:dim ])
 
@@ -203,21 +205,16 @@ function characteristic_number_generator(T)
       add_constraint(k,dim,relative=true)
     end
       
-    if monodromy
-      F = System(eqs, variables=z, parameters=pv)
-      sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
-          F.parameters => p0))) < 1e-12, z0s)
-      z0s = z0s[1:sols]
-      if show_progress
-        println("starting with ", sols, " solutions")
-      end
-      return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
-        max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
-      println("done")
-    else
-      F = System(eqs(pv=>randn(size(pv))), variables=z)
-      return nsolutions(solve(F))
+    F = System(eqs, variables=z, parameters=pv)
+    sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
+        F.parameters => p0))) < 1e-12, z0s)
+    z0s = z0s[1:sols]
+    if show_progress
+      println("starting with ", sols, " solutions")
     end
+    return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
+      max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
+    println("done")
   end
   return characteristic_number
 end
@@ -383,10 +380,6 @@ function characteristic_number_old(T, alpha; startsols=1, xtol=1e-14, compile=tr
 end
 
 function linear_forms_vanishing_on_prefix(vs,k)
-  # println("linear_forms_vanishing_on_prefix")
-  # println(vs)
-  # println(k)
-  # println(size(vs))
   return transpose(qr(hcat(vs,randn(size(vs)[1],k))).Q[:,end-k+1:end])
 end
 
@@ -470,21 +463,16 @@ function relative_characteristic_number(T,alpha;compile=false,show_progress=fals
   return res
 end
   
-function chromatic_polynomial_coefficient(T, k)
-  a,b,_ = size(T)
-  characteristic_number = characteristic_number_generator(T)
-  return characteristic_number(alpha=[a-1-k , zeros(Int64,b-3)..., k])
-end
-  
-function relative_chromatic_polynomial_coefficient(T, k)
-  a,b,_ = size(T)
-  characteristic_number = characteristic_number_generator(T)
-  return characteristic_number(beta=[a-1-k , zeros(Int64,b-3)..., k])
-end
-
 function chromatic_polynomial(T)
   a,b,_ = size(T)
-  return [chromatic_polynomial_coefficient(T, k) for k in 0:a-1]
+  characteristic_number = characteristic_number_generator(T)
+  return [characteristic_number(alpha=[a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
+end
+  
+function relative_chromatic_polynomial(T)
+  a,b,_ = size(T)
+  characteristic_number = characteristic_number_generator(T)
+  return [characteristic_number(beta=[a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
 end
   
 export chromatic_polynomial_old
@@ -497,11 +485,6 @@ export relative_chromatic_polynomial_old
 function relative_chromatic_polynomial_old(T)
   a,b,_ = size(T)
   return [relative_characteristic_number(T,[a-1-k , zeros(Int64,b-3)..., k]) for k in 0:a-1]
-end
-
-function relative_chromatic_polynomial(T)
-  a,b,_ = size(T)
-  return [relative_chromatic_polynomial_coefficient(T, k) for k in 0:a-1]
 end
 
 function characteristic_numbers(T)
