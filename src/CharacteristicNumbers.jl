@@ -90,65 +90,72 @@ function characteristic_number_generator(T)
   z = vcat(x, vec(y))
   getz(x0) = vcat(x0, vec(inv(M(x0))))
   
-  mbasis = [zeros(n,n) for i in 1:n^2]
-  for (i,j) in product(1:n,1:n)
-    mbasis[(i-1)*n+j][i,j] = 1
-  end
-  @memoize function get_function(ix; relative = false)
-    nderivatives = length(ix)
-    k = n-nderivatives
-    if relative
-      if k < n-k 
-        return det_polarized( [fill(m,k); [T[i,:,:] for i in ix] ])
-      else
-        return det_polarized( [y*T[i,:,:] for i in ix] )
-      end
-    else
-      if k < n-k 
-        return det_polarized( [fill(m,k); [mbasis[i] for i in ix] ])
-      else
-        return det_polarized( [y*mbasis[i] for i in ix] )
-      end
-    end
-  end
-    
-  @memoize function get_mapping_spanning_set(nderivatives; relative=false)
-    if !relative 
-      spanning_set = Vector{Int64}[]
-      for (ix,jx) in product(subsets(1:n,nderivatives),subsets(1:n,nderivatives))
-        push!(spanning_set,[(i-1)*n+j for (i,j) in zip(ix,jx)])
-      end
-    else
-      if nderivatives == 1
-        spanning_set = [[i] for i in 1:a]
-      else
-        spanning_set = Set{Vector{Int64}}()
-        for s in get_mapping_spanning_set(nderivatives-1, relative=true)
-          for i in 1:a
-            push!(spanning_set,sort([s; i]))
-          end
-        end
-        spanning_set = sort(collect(spanning_set))
-      end
-    end
-    spanning_set_fs = [get_function(s,relative=relative) for s in spanning_set]
-    F = qr( ((z0,exp) -> exp(z=>z0)).([getz(randn(a)) for _ in 1:length(spanning_set)],[ 
-        exp for _ in 1:1, exp in spanning_set_fs ]), ColumnNorm())
-    println("nderivatives ",nderivatives)
+  function spanning_set_indices(fs)
+    F = qr( ((z0,exp) -> exp(z=>z0)).([getz(randn(a)) for _ in 1:length(fs)],[ 
+        exp for _ in 1:1, exp in fs ]), ColumnNorm())
     r = findfirst(abs.(diag(F.R)) .< 1e-10)
     if r === nothing
-      r = length(spanning_set)
+      r = length(fs)
     else
       r = r - 1
     end
-    ixs = sort(F.p[1:r])
-    spanning_set = [spanning_set[i] for i in ixs]
-    println(spanning_set)
-    spanning_set_fs = [spanning_set_fs[i] for i in ixs]
-    display(spanning_set_fs)
-    return spanning_set
+    return sort(F.p[1:r])
   end
-  # return m,get_function,get_mapping_spanning_set
+    
+  @memoize function relative_f_from_derivative(ix)
+    nderivatives = length(ix)
+    k = n-nderivatives
+    if k < n-k 
+      # return det_polarized( [fill(m,k); [T[i,:,:] for i in ix] ])
+      p = det(m)
+      for i in ix
+        p = differentiate(p,x[i])
+      end
+      return p
+    else
+      return det_polarized( [y*T[i,:,:] for i in ix] )
+    end
+  end
+
+  @memoize function get_derivative_coordinates_relative(nderivatives)
+    if nderivatives == 1
+      spanning_set = [[i] for i in 1:a]
+    else
+      spanning_set = Set{Vector{Int64}}()
+      for s in get_derivative_coordinates_relative(nderivatives-1)
+        for i in 1:a
+          push!(spanning_set,sort([s; i]))
+        end
+      end
+      spanning_set = sort(collect(spanning_set))
+    end
+    spanning_fs = [ relative_f_from_derivative(s) for s in spanning_set ]
+    ixs = spanning_set_indices(spanning_fs)
+    return [spanning_set[i] for i in ixs]
+  end
+    
+  @memoize function get_fs(k; relative=false)
+    if k == 1 
+      # this is the same for relative and nonrelative
+      return x
+    end
+    if relative
+      nderivatives = n-k
+      return [relative_f_from_derivative(s)
+        for s in get_derivative_coordinates_relative(nderivatives)]
+    else
+      if k < n-k
+        spanning_fs = [ det(m[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ]
+      else
+        # using det(m[ix,jx]) = det(m)*det(inv(m)[1:n - jx, 1:n - ix])
+        # so the below are the same functions as above up to multiplication by det(m)
+        spanning_fs = [ det(y[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ]
+      end
+      ixs = spanning_set_indices(spanning_fs)
+      spanning_fs = [spanning_fs[i] for i in ixs]
+      return spanning_fs
+    end
+  end
   
   function characteristic_number(; alpha = nothing, beta = nothing, startsols=1, 
     xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2, monodromy=true)
@@ -179,11 +186,7 @@ function characteristic_number_generator(T)
       if dim == 0
         return
       end
-      nderivatives = n-k
-      fs = [get_function(s,relative=relative) 
-        for s in get_mapping_spanning_set(nderivatives; relative=relative)]
-      length(fs)
-      
+      fs = get_fs(k,relative=relative) 
       @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
       append!(eqs,[ sum(eq*v for (eq,v) in zip(fs,p[:,i])) for i in 1:dim ])
 
@@ -210,6 +213,7 @@ function characteristic_number_generator(T)
       end
       return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
         max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
+      println("done")
     else
       F = System(eqs(pv=>randn(size(pv))), variables=z)
       return nsolutions(solve(F))
@@ -468,12 +472,14 @@ end
   
 function chromatic_polynomial_coefficient(T, k)
   a,b,_ = size(T)
-  return characteristic_number(T,alpha=[a-1-k , zeros(Int64,b-3)..., k])
+  characteristic_number = characteristic_number_generator(T)
+  return characteristic_number(alpha=[a-1-k , zeros(Int64,b-3)..., k])
 end
   
 function relative_chromatic_polynomial_coefficient(T, k)
   a,b,_ = size(T)
-  return characteristic_number(T,beta=[a-1-k , zeros(Int64,b-3)..., k])
+  characteristic_number = characteristic_number_generator(T)
+  return characteristic_number(beta=[a-1-k , zeros(Int64,b-3)..., k])
 end
 
 function chromatic_polynomial(T)
