@@ -149,7 +149,7 @@ function characteristic_number_generator(T)
       else
         # using det(m[ix,jx]) = det(m)*det(inv(m)[1:n - jx, 1:n - ix])
         # so the below are the same functions as above up to multiplication by det(m)
-        spanning_fs = vec([ det(y[ix,jx]) for (ix,jx) in product(subsets(1:n,k),subsets(1:n,k)) ])
+        spanning_fs = vec([ det(y[ix,jx]) for (ix,jx) in product(subsets(1:n,n-k),subsets(1:n,n-k)) ])
       end
       ixs = spanning_set_indices(spanning_fs)
       spanning_fs = [spanning_fs[i] for i in ixs]
