@@ -70,7 +70,7 @@ function det_polarized(Xs, deduplicate_terms=true)
 end
   
 function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1, 
-    xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2)
+    xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2, monodromy=true)
   a, n, m = size(T)
   @assert n == m
   if alpha === nothing
@@ -88,18 +88,23 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
   
   x0s = randn(a, startsols)
   v0 = vec(svd(x0s).U[:, 1])
+  @var v[1:a]
   # v0 can be any vector, pick one take make the next line not blow up x0's too much
   x0s ./= sum(v0 .* x0s, dims=1)
   x0s = [x0s[:, j] for j in 1:size(x0s, 2)]
-  eqs = [sum(v0 .* x) .- 1]
+  eqs = [sum(v .* x) .- 1]
   
   M(e) = dropdims(sum(e .* T, dims=1), dims=1)
+  m = M(x)
 
-  append!(eqs, vec(y * M(x) - I))
+  append!(eqs, vec(y * m - I))
   
   z = vcat(x, vec(y))
   getz(x0) = vcat(x0, vec(inv(M(x0))))
   z0s = [getz(x0) for x0 in x0s]
+  
+  pv = v
+  p0 = v0
 
   mbasis = [zeros(n,n) for i in 1:n^2]
   for (i,j) in product(1:n,1:n)
@@ -110,13 +115,13 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     k = n-nderivatives
     if relative
       if k < n-k 
-        return det_polarized( [fill(M(x),k); [T[i,:,:] for i in ix] ])
+        return det_polarized( [fill(m,k); [T[i,:,:] for i in ix] ])
       else
         return det_polarized( [y*T[i,:,:] for i in ix] )
       end
     else
       if k < n-k 
-        return det_polarized( [fill(M(x),k); [mbasis[i] for i in ix] ])
+        return det_polarized( [fill(m,k); [mbasis[i] for i in ix] ])
       else
         return det_polarized( [y*mbasis[i] for i in ix] )
       end
@@ -145,6 +150,7 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     spanning_set_fs = [get_function(s,relative=relative) for s in spanning_set]
     F = qr( ((z0,exp) -> exp(z=>z0)).([getz(randn(a)) for _ in 1:length(spanning_set)],[ 
         exp for _ in 1:1, exp in spanning_set_fs ]), ColumnNorm())
+    println("nderivatives ",nderivatives)
     r = findfirst(abs.(diag(F.R)) .< 1e-10)
     if r === nothing
       r = length(spanning_set)
@@ -153,13 +159,12 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     end
     ixs = sort(F.p[1:r])
     spanning_set = [spanning_set[i] for i in ixs]
+    println(spanning_set)
     spanning_set_fs = [spanning_set_fs[i] for i in ixs]
+    display(spanning_set_fs)
     return spanning_set
   end
   # return m,get_function,get_mapping_spanning_set
-  
-  pv = Vector{Variable}()
-  p0 = Vector{Float64}()
 
   function add_constraint(k, dim; relative=false)
     if dim == 0
@@ -186,15 +191,20 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     add_constraint(k,dim,relative=true)
   end
     
-  F = System(eqs, variables=z, parameters=pv)
-  sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
-      F.parameters => p0))) < 1e-12, z0s)
-  z0s = z0s[1:sols]
-  if show_progress
-    println("starting with ", sols, " solutions")
+  if monodromy
+    F = System(eqs, variables=z, parameters=pv)
+    sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
+        F.parameters => p0))) < 1e-12, z0s)
+    z0s = z0s[1:sols]
+    if show_progress
+      println("starting with ", sols, " solutions")
+    end
+    return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
+      max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
+  else
+    F = System(eqs(pv=>randn(size(pv))), variables=z)
+    return nsolutions(solve(F))
   end
-  return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
-    max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
 end
   
 export characteristic_number_ss
@@ -425,6 +435,7 @@ function relative_characteristic_number(T,alpha;compile=false,show_progress=fals
     append!(eqs,vec(sum(randn(length(ds),k).*ds,dims=1)))
   end
 
+  display(eqs)
   C = System(eqs)
   sol = solve(C,compile=compile,show_progress=show_progress,tracker_options=(parameters=:conservative,))
 
