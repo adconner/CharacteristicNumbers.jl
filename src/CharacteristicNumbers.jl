@@ -71,41 +71,25 @@ end
   
 function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1, 
     xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2, monodromy=true)
+  return characteristic_number_generator(T)(alpha = alpha, beta = beta, startsols=startsols, 
+    xtol=xtol, compile=compile, show_progress=show_progress, max_loops_no_progress=max_loops_no_progress, monodromy=monodromy)
+end
+  
+export characteristic_number_generator
+function characteristic_number_generator(T)
   a, n, m = size(T)
   @assert n == m
-  if alpha === nothing
-    alpha = fill(0,n-1)
-  end
-  if beta === nothing
-    beta = fill(0,n-1)
-  end
-  @assert length(alpha) == n - 1
-  @assert length(beta) == n - 1
-  @assert sum(alpha) + sum(beta) == a - 1
   
   @var x[1:a]
   @var y[1:n,1:n]
-  
-  x0s = randn(a, startsols)
-  v0 = vec(svd(x0s).U[:, 1])
   @var v[1:a]
-  # v0 can be any vector, pick one take make the next line not blow up x0's too much
-  x0s ./= sum(v0 .* x0s, dims=1)
-  x0s = [x0s[:, j] for j in 1:size(x0s, 2)]
-  eqs = [sum(v .* x) .- 1]
   
   M(e) = dropdims(sum(e .* T, dims=1), dims=1)
   m = M(x)
 
-  append!(eqs, vec(y * m - I))
-  
   z = vcat(x, vec(y))
   getz(x0) = vcat(x0, vec(inv(M(x0))))
-  z0s = [getz(x0) for x0 in x0s]
   
-  pv = v
-  p0 = v0
-
   mbasis = [zeros(n,n) for i in 1:n^2]
   for (i,j) in product(1:n,1:n)
     mbasis[(i-1)*n+j][i,j] = 1
@@ -165,46 +149,73 @@ function characteristic_number(T; alpha = nothing, beta = nothing, startsols=1,
     return spanning_set
   end
   # return m,get_function,get_mapping_spanning_set
-
-  function add_constraint(k, dim; relative=false)
-    if dim == 0
-      return
+  
+  function characteristic_number(; alpha = nothing, beta = nothing, startsols=1, 
+    xtol=1e-14, compile=true, show_progress=true, max_loops_no_progress=2, monodromy=true)
+    if alpha === nothing
+      alpha = fill(0,n-1)
     end
-    nderivatives = n-k
-    fs = [get_function(s,relative=relative) 
-      for s in get_mapping_spanning_set(nderivatives; relative=relative)]
-    length(fs)
-    
-    @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
-    append!(eqs,[ sum(eq*v for (eq,v) in zip(fs,p[:,i])) for i in 1:dim ])
-
-    p0cur = transpose(linear_forms_vanishing_on_prefix(
-      [eq(z=>z0) for eq in fs, z0 in z0s], dim))
-    append!(pv,vec(p))
-    append!(p0,vec(p0cur))
-  end
-
-  for (k,dim) in enumerate(alpha)
-    add_constraint(k,dim,relative=false)
-  end
-  for (k,dim) in enumerate(beta)
-    add_constraint(k,dim,relative=true)
-  end
-    
-  if monodromy
-    F = System(eqs, variables=z, parameters=pv)
-    sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
-        F.parameters => p0))) < 1e-12, z0s)
-    z0s = z0s[1:sols]
-    if show_progress
-      println("starting with ", sols, " solutions")
+    if beta === nothing
+      beta = fill(0,n-1)
     end
-    return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
-      max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
-  else
-    F = System(eqs(pv=>randn(size(pv))), variables=z)
-    return nsolutions(solve(F))
+    @assert length(alpha) == n - 1
+    @assert length(beta) == n - 1
+    @assert sum(alpha) + sum(beta) == a - 1
+    
+    x0s = randn(a, startsols)
+    v0 = vec(svd(x0s).U[:, 1])
+    # v0 can be any vector, pick one take make the next line not blow up x0's too much
+    x0s ./= sum(v0 .* x0s, dims=1)
+    x0s = [x0s[:, j] for j in 1:size(x0s, 2)]
+    eqs = [sum(v .* x) .- 1]
+    
+    append!(eqs, vec(y * m - I))
+    z0s = [getz(x0) for x0 in x0s]
+    
+    pv = copy(v)
+    p0 = v0
+
+    function add_constraint(k, dim; relative=false)
+      if dim == 0
+        return
+      end
+      nderivatives = n-k
+      fs = [get_function(s,relative=relative) 
+        for s in get_mapping_spanning_set(nderivatives; relative=relative)]
+      length(fs)
+      
+      @var p[relative ? 2 : 1, k, 1:length(fs), 1:dim]
+      append!(eqs,[ sum(eq*v for (eq,v) in zip(fs,p[:,i])) for i in 1:dim ])
+
+      p0cur = transpose(linear_forms_vanishing_on_prefix(
+        [eq(z=>z0) for eq in fs, z0 in z0s], dim))
+      append!(pv,vec(p))
+      append!(p0,vec(p0cur))
+    end
+
+    for (k,dim) in enumerate(alpha)
+      add_constraint(k,dim,relative=false)
+    end
+    for (k,dim) in enumerate(beta)
+      add_constraint(k,dim,relative=true)
+    end
+      
+    if monodromy
+      F = System(eqs, variables=z, parameters=pv)
+      sols = count(z0 -> norm(Float64.(evaluate(F.expressions, F.variables => z0,
+          F.parameters => p0))) < 1e-12, z0s)
+      z0s = z0s[1:sols]
+      if show_progress
+        println("starting with ", sols, " solutions")
+      end
+      return nsolutions(monodromy_solve(F, z0s, p0, compile=compile, show_progress=show_progress,
+        max_loops_no_progress=max_loops_no_progress, unique_points_atol=xtol))
+    else
+      F = System(eqs(pv=>randn(size(pv))), variables=z)
+      return nsolutions(solve(F))
+    end
   end
+  return characteristic_number
 end
   
 export characteristic_number_ss
